@@ -1,0 +1,10 @@
+[
+  {
+    "languageId": "infd",
+    "command": ".venv/bin/infd-lsp",
+    "fileExtensions": [
+      ".infd",
+      ".inft"
+    ]
+  }
+]

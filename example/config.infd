@@ -1,0 +1,24 @@
+# Infinity Music 应用配置（InfinityData 语言）
+# 由 src/infinity_music/main.py 加载，并使用 Schema(AppConfig, strict) 校验顶层结构。
+# 路径均为相对本文件（项目根）的 POSIX 形式；也可以写绝对路径。
+
+~Server {
+    host: str = "0.0.0.0",
+    port: <int, range(1, 65535)> = 8000,
+    reload: bool = false,
+}
+
+~AppConfig {
+    server: <Server> = Server(),
+    media_dir: path = p"./res",
+    static_dir: path = p"./static",
+    ui_css: path = p"./custom.css",
+    ui_js: path = p"./custom.js",
+}
+
+# ---- 顶层数据（结构与 AppConfig 模板一致，Schema 严格校验）----
+server = Server()
+media_dir = p"./res"
+static_dir = p"./static"
+ui_css = p"./custom.css"
+ui_js = p"./custom.js"

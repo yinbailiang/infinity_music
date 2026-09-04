@@ -7,10 +7,14 @@ requires-python = ">=3.14"
 dependencies = [
     "pydantic",
     "fastapi",
-    "infinity_data",
+    "infinity_data[tool]",
     "uvicorn>=0.52.4",
     "mutagen>=1.48.1",
 ]
+
+
+[project.scripts]
+infmusic = "infinity_music.main:main"
 
 
 [dependency-groups]
@@ -41,7 +45,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-infinity_data = ["py.typed"]
+infinity_music = ["py.typed"]
 
 [tool.ruff]
 line-length = 120
@@ -61,7 +65,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["infinity_data"]
+known-first-party = ["infinity_music"]
 
 [tool.ruff.format]
 indent-style = "space"

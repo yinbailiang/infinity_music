@@ -1,240 +1,165 @@
 """
-Minimal FastAPI music app with elegant resource management.
+Infinity Music: a minimal FastAPI app for distributing music and media.
 
-Uses content-addressed SHA-256 IDs and a JSON cache to avoid recomputing
-hashes on every startup.
+No module-level state: main() takes the .infd config path from the command
+line, compiles it, then builds the dependency graph (config -> ResourceManager
+-> FastAPI routes) and injects it explicitly before serving.
 """
 
+import argparse
 import base64
-import hashlib
-import json
 import mimetypes
 import os
-from functools import lru_cache
+from dataclasses import dataclass
 from html import escape
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from pathlib import Path, PurePath
+from typing import Any, List, Tuple, cast
 
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
+from infinity_data import Schema, load
 
 from infinity_music.music_meta import get_audio_metadata
+from infinity_music.resource_manager import ResourceManager
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Configuration model（.infd，InfinityData 语言）
 # ---------------------------------------------------------------------------
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RES_ROOT = PROJECT_ROOT / 'res'
-CACHE_FILE_NAME = '.hash_cache.json'
-CUSTOM_CSS = PROJECT_ROOT / 'custom.css'
-CUSTOM_JS = PROJECT_ROOT / 'custom.js'
+CONFIG_SCHEMA = Schema(template='AppConfig', mode='strict')
 
 
-def load_custom_css() -> str:
-    return CUSTOM_CSS.read_text() if CUSTOM_CSS.exists() else ''
+@dataclass(frozen=True)
+class AppConfig:
+    """Typed application config compiled from an .infd file."""
+
+    host: str
+    port: int
+    reload: bool
+    res_root: Path
+    static_root: Path
+    custom_css: Path
+    custom_js: Path
 
 
-def load_custom_js() -> str:
-    return CUSTOM_JS.read_text() if CUSTOM_JS.exists() else ''
+def _resolve_path(base: Path, value: PurePath) -> Path:
+    """Resolve a path value; relative ones are anchored to the config dir."""
+    if value.is_absolute():
+        return Path(value)
+    return (base / value).resolve()
 
 
-# ---------------------------------------------------------------------------
-# Resource Manager
-# ---------------------------------------------------------------------------
-class ResourceManager:
-    """Scans a media directory, maintains content-hash IDs, and serves lookups."""
+def load_config(path: Path) -> AppConfig:
+    """Compile the .infd config at *path*; raise RuntimeError on failure."""
+    result = load(path, schema=CONFIG_SCHEMA)
+    if result.has_errors:
+        details = '\n'.join(f'  {d.code}: {d.message}' for d in result.diagnostics)
+        raise RuntimeError(f'配置 {path} 编译失败:\n{details}')
 
-    def __init__(self, root: Path):
-        self.root = root
-        self.cache_path = root / CACHE_FILE_NAME
-        self.resources: List[Tuple[Path, str]] = []  # (absolute_path, sha256)
-        self._id_to_path: Dict[str, Path] = {}
-        self._path_to_id: Dict[Path, str] = {}
-        self._scan()
-
-    # ------------------------------------------------------------------ scan
-    def _scan(self) -> None:
-        """Scan the media directory, using cached hashes when possible."""
-        if not self.root.exists():
-            return
-
-        cache = self._load_cache()
-        new_cache: Dict[str, Dict[str, str]] = {}
-        resources: List[Tuple[Path, str]] = []
-
-        for current_root, dirs, files in os.walk(self.root):
-            # Skip hidden directories (optional)
-            dirs[:] = [d for d in dirs if not d.startswith('.')]
-
-            for file_name in files:
-                if file_name == CACHE_FILE_NAME:
-                    continue
-
-                file_path = Path(current_root, file_name)
-                rel_path = file_path.relative_to(self.root).as_posix()
-                stat = file_path.stat()
-                meta_key = f'{stat.st_size}:{stat.st_mtime_ns}'
-
-                cached_entry = cache.get(rel_path)
-                if cached_entry and cached_entry.get('meta') == meta_key:
-                    # File unchanged: reuse cached hash
-                    sha = cached_entry['hash']
-                else:
-                    # Compute new hash (chunked reading to handle large files)
-                    sha = self._file_sha256(file_path)
-
-                new_cache[rel_path] = {'hash': sha, 'meta': meta_key}
-                resources.append((file_path, sha))
-
-        # Update instance state
-        self.resources = sorted(resources, key=lambda x: x[0])
-        self._id_to_path = {sha: path for path, sha in self.resources}
-        self._path_to_id = {path: sha for path, sha in self.resources}
-
-        # Persist updated cache
-        self._save_cache(new_cache)
-
-    # ------------------------------------------------------------- utilities
-    @staticmethod
-    def _file_sha256(path: Path) -> str:
-        """Compute SHA-256 of a file in chunks (memory efficient)."""
-        h = hashlib.sha256()
-        with path.open('rb') as f:
-            for chunk in iter(lambda: f.read(1024 * 1024), b''):
-                h.update(chunk)
-        return h.hexdigest()
-
-    def _load_cache(self) -> Dict[str, Dict[str, str]]:
-        if self.cache_path.exists():
-            try:
-                return json.loads(self.cache_path.read_text())
-            except (json.JSONDecodeError, OSError):
-                pass  # Corrupted cache -> ignore, will rebuild
-        return {}
-
-    def _save_cache(self, cache: Dict[str, Dict[str, str]]) -> None:
-        """Atomically write cache to disk."""
-        tmp_path = self.cache_path.with_suffix('.tmp')
-        tmp_path.write_text(json.dumps(cache, indent=2))
-        tmp_path.replace(self.cache_path)
-
-    # --------------------------------------------------------------- queries
-    def get_by_id(self, file_id: str) -> Optional[Path]:
-        """Return the Path for a given file ID, or None if not found."""
-        return self._id_to_path.get(file_id)
-
-    def get_id(self, path: Path) -> Optional[str]:
-        """Return the ID for a given Path, or None if not found."""
-        return self._path_to_id.get(path)
+    raw = result.value
+    server: dict[str, Any] = cast('dict[str, Any]', raw['server'])
+    base = path.resolve().parent
+    return AppConfig(
+        host=cast(str, server['host']),
+        port=cast(int, server['port']),
+        reload=cast(bool, server['reload']),
+        res_root=_resolve_path(base, raw['media_dir']),
+        static_root=_resolve_path(base, raw['static_dir']),
+        custom_css=_resolve_path(base, raw['ui_css']),
+        custom_js=_resolve_path(base, raw['ui_js']),
+    )
 
 
 # ---------------------------------------------------------------------------
-# Dependency injection
+# HTML helpers（纯函数，无全局状态）
 # ---------------------------------------------------------------------------
-@lru_cache
-def get_resource_manager() -> ResourceManager:
-    """Return a singleton ResourceManager for the application."""
-    return ResourceManager(RES_ROOT)
+def _read_optional(path: Path) -> str:
+    """Read a file's text, returning '' if it does not exist."""
+    return path.read_text() if path.exists() else ''
 
 
-# ---------------------------------------------------------------------------
-# FastAPI app
-# ---------------------------------------------------------------------------
-app = FastAPI(title='Infinity Music', version='0.1.0')
+def _render_home(resources: List[Tuple[Path, str]], config: AppConfig) -> str:
+    """Render the home page listing every resource."""
+    if not resources:
+        body = '<p class="home-res">Nothing</p>'
+    else:
+        body = ''.join(
+            f'<p class="home-res"><a href="/detail/{sha}">{escape(path.name)}</a></p>'
+            for path, sha in resources
+        )
 
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
-@app.get('/', response_class=HTMLResponse)
-async def home(manager: ResourceManager = Depends(get_resource_manager)) -> str:
-    def render_list_html(resources: List[Tuple[Path, str]]) -> str:
-        """Return an HTML fragment listing all resources."""
-        if not resources:
-            return '<p class="home-res">Nothing</p>'
-        items: list[str] = []
-        for path, sha in resources:
-            items.append(f'<p class="home-res"><a href="/detail/{sha}">{escape(path.name)}</a></p>')
-        return ''.join(items)
-
-    return f"""
-<!doctype html>
+    return f"""<!doctype html>
 <html lang="zh-Hans">
 <head>
     <meta charset="utf-8" />
     <title>Infinity Music</title>
-    <style>{load_custom_css()}</style>
+    <style>{_read_optional(config.custom_css)}</style>
 </head>
-<script>{load_custom_js()}</script>
+<script>{_read_optional(config.custom_js)}</script>
 <body class="home-body">
     <main class="home-main">
         <h1 class="home-title">Infinity Music</h1>
-        {render_list_html(manager.resources)}
+        {body}
     </main>
 </body>
 </html>
 """
 
 
-@app.get('/detail/{file_id}', response_class=HTMLResponse)
-async def resource_detail(
-    file_id: str,
-    manager: ResourceManager = Depends(get_resource_manager),
-) -> str:
-    file_path = manager.get_by_id(file_id)
-    if file_path is None:
-        raise HTTPException(status_code=404)
+def _render_detail(path: Path, file_id: str, config: AppConfig) -> str:
+    """Render the detail page for one media file."""
+    mime_type, _ = mimetypes.guess_type(path.name)
 
-    sha = manager.get_id(file_path)
-    mime_type, _ = mimetypes.guess_type(file_path.name)
     if mime_type and mime_type.startswith('video/'):
-        title = f'<h1 class="detail-title">{escape(file_path.name)}</h1>'
-        player = f'<video class="detail-media" src="/media/{sha}" controls preload="metadata" loop autoplay></video>'
+        title = f'<h1 class="detail-title">{escape(path.name)}</h1>'
+        player = (
+            f'<video class="detail-media" src="/media/{file_id}" controls '
+            'preload="metadata" loop autoplay></video>'
+        )
     elif mime_type and mime_type.startswith('audio/'):
-        # 音频文件：解析元数据并生成 HTML
-        meta = get_audio_metadata(file_path)
-        meta_title = meta.get('title') or file_path.stem
+        # 音频：解析标签，内嵌封面图
+        meta = get_audio_metadata(path)
+        meta_title = meta.get('title') or path.stem
         meta_artist = meta.get('artist') or 'Unknown Artist'
         meta_album = meta.get('album') or ''
 
-        # 处理封面图
-        artwork_html = ''
+        artwork = ''
         if meta.get('artwork_data'):
             artwork_b64 = base64.b64encode(meta['artwork_data']).decode()
             artwork_mime = meta.get('artwork_mime') or 'image/jpeg'
-            artwork_html = f'<img class="detail-cover" src="data:{artwork_mime};base64,{artwork_b64}" alt="Cover" />'
+            artwork = (
+                f'<img class="detail-cover" src="data:{artwork_mime};base64,'
+                f'{artwork_b64}" alt="Cover" />'
+            )
 
-        title = ""
-        player = f"""
-<div class="detail-meta">
-    {artwork_html}
+        title = ''
+        player = f"""<div class="detail-meta">
+    {artwork}
     <div class="detail-meta-text">
         <p class="detail-meta-title">{escape(meta_title)}</p>
         <p class="detail-artist">{escape(meta_artist)}</p>
         <p class="detail-album">{escape(meta_album)}</p>
     </div>
 </div>
-<audio class="detail-media" src="/media/{sha}" controls preload="metadata" loop autoplay></audio>
-        """
+<audio class="detail-media" src="/media/{file_id}" controls preload="metadata" loop autoplay></audio>
+"""
     else:
-        title = f'<h1 class="detail-title">{escape(file_path.name)}</h1>'
+        title = f'<h1 class="detail-title">{escape(path.name)}</h1>'
         player = ''
 
-    return f"""
-<!doctype html>
+    return f"""<!doctype html>
 <html lang="zh-Hans">
 <head>
     <meta charset="utf-8" />
-    <title>{escape(file_path.name)} - Infinity Music</title>
-    <style>{load_custom_css()}</style>
+    <title>{escape(path.name)} - Infinity Music</title>
+    <style>{_read_optional(config.custom_css)}</style>
 </head>
-<script>{load_custom_js()}</script>
+<script>{_read_optional(config.custom_js)}</script>
 <body class="detail-body">
     <main class="detail-main">
         {title}
         {player}
-        <a class="detail-choice" href="/media/{sha}">Download</a>
+        <a class="detail-choice" href="/media/{file_id}">Download</a>
         <a class="detail-choice" href="/">Back</a>
     </main>
 </body>
@@ -242,20 +167,127 @@ async def resource_detail(
 """
 
 
-@app.get('/media/{file_id}')
+# ---------------------------------------------------------------------------
+# Routes（依赖经 request.app.state 注入，无模块级状态）
+# ---------------------------------------------------------------------------
+router = APIRouter()
+
+
+def get_config(request: Request) -> AppConfig:
+    """FastAPI dependency: the AppConfig stored on app.state."""
+    config = request.app.state.config
+    assert isinstance(config, AppConfig)
+    return config
+
+
+def get_manager(request: Request) -> ResourceManager:
+    """FastAPI dependency: the ResourceManager stored on app.state."""
+    manager = request.app.state.resource_manager
+    assert isinstance(manager, ResourceManager)
+    return manager
+
+
+@router.get('/', response_class=HTMLResponse)
+async def home(
+    manager: ResourceManager = Depends(get_manager),
+    config: AppConfig = Depends(get_config),
+) -> str:
+    return _render_home(manager.resources, config)
+
+
+@router.get('/detail/{file_id}', response_class=HTMLResponse)
+async def resource_detail(
+    file_id: str,
+    manager: ResourceManager = Depends(get_manager),
+    config: AppConfig = Depends(get_config),
+) -> str:
+    file_path = manager.get_by_id(file_id)
+    if file_path is None:
+        raise HTTPException(status_code=404)
+    sha = manager.get_id(file_path)
+    assert sha is not None  # get_by_id 命中则 id 必存在
+    return _render_detail(file_path, sha, config)
+
+
+@router.get('/media/{file_id}')
 async def media(
     file_id: str,
-    manager: ResourceManager = Depends(get_resource_manager),
+    manager: ResourceManager = Depends(get_manager),
 ) -> FileResponse:
     file_path = manager.get_by_id(file_id)
     if file_path is None:
         raise HTTPException(status_code=404)
-
     return FileResponse(path=file_path, filename=file_path.name)
+
+
+@router.get('/static/{file_path:path}')
+async def static_resource(
+    file_path: str,
+    config: AppConfig = Depends(get_config),
+) -> FileResponse:
+    """Serve a file from the static dir, guarding against path traversal."""
+    root = config.static_root.resolve()
+    target = (root / file_path).resolve()
+    if not target.is_relative_to(root):
+        raise HTTPException(status_code=404)
+    if not target.is_file():
+        raise HTTPException(status_code=404)
+    return FileResponse(path=target)
+
+
+# ---------------------------------------------------------------------------
+# App factory（显式依赖注入，无全局状态）
+# ---------------------------------------------------------------------------
+def build_app(config: AppConfig) -> FastAPI:
+    """Build a FastAPI app; config & manager are injected via app.state."""
+    app = FastAPI(title='Infinity Music', version='0.1.0')
+    app.state.config = config
+    app.state.resource_manager = ResourceManager(config.res_root)
+    app.include_router(router)
+    return app
 
 
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+CONFIG_ENV = 'INFINITY_MUSIC_CONFIG'
+
+
+def create_app_from_env() -> FastAPI:
+    """uvicorn factory 入口：从 CONFIG_ENV 环境变量构建 app。
+
+    uvicorn 的 reload 模式要求 app 以可导入的字符串入口提供，而配置路径
+    来自命令行，因此经环境变量传递、由本工厂重建依赖并注入。
+    """
+    return build_app(load_config(Path(os.environ[CONFIG_ENV])))
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Parse CLI args, load the config, build the app, and serve it."""
+    parser = argparse.ArgumentParser(description='Infinity Music 分发服务')
+    parser.add_argument(
+        '-c',
+        '--config',
+        type=Path,
+        default=Path('config.infd'),
+        help='配置文件路径（.infd，默认 ./config.infd）',
+    )
+    args = parser.parse_args(argv)
+
+    config = load_config(args.config)
+    if config.reload:
+        # reload 需要可导入的字符串入口（uvicorn 不支持 app 对象 + reload）
+        os.environ[CONFIG_ENV] = str(args.config.resolve())
+        uvicorn.run(
+            'infinity_music.main:create_app_from_env',
+            factory=True,
+            host=config.host,
+            port=config.port,
+            reload=True,
+        )
+    else:
+        uvicorn.run(build_app(config), host=config.host, port=config.port)
+
+
 if __name__ == '__main__':
-    uvicorn.run('infinity_music.main:app', host='0.0.0.0', port=8000, reload=True)
+    main()

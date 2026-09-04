@@ -1,10 +1,45 @@
 document.addEventListener('DOMContentLoaded', function () {
+    // ---------- 视频 Media Session + 播放位置保存 ----------
     document.querySelectorAll('video').forEach(video => {
+        // 播放位置保存相关
+        const storageKey = `media-progress:${video.src}`;
 
+        function saveProgress() {
+            if (!video.currentTime || video.duration && video.currentTime === video.duration) return;
+            localStorage.setItem(storageKey, video.currentTime);
+        }
+
+        // 恢复播放位置
+        function restoreProgress() {
+            const saved = localStorage.getItem(storageKey);
+            if (saved) {
+                const time = parseFloat(saved);
+                if (!isNaN(time) && time > 0) {
+                    video.currentTime = time;
+                }
+            }
+        }
+
+        // 节流保存（每 3 秒保存一次）
+        let lastSave = 0;
+        function throttledSave() {
+            const now = Date.now();
+            if (now - lastSave > 3000) {
+                saveProgress();
+                lastSave = now;
+            }
+        }
+
+        video.addEventListener('loadedmetadata', restoreProgress);
+        video.addEventListener('timeupdate', throttledSave);
+        video.addEventListener('play', throttledSave); // 开始播放时也记录
+        video.addEventListener('pause', saveProgress); // 暂停时立即保存
+        video.addEventListener('ended', saveProgress); // 播放结束时保存
+
+        // --- 原有视频 Media Session 逻辑 ---
         function setMediaMetadata() {
             if (!video.videoWidth || !video.videoHeight) return; // 如果视频尺寸未知，等待
 
-            // 截取当前帧
             const canvas = document.createElement('canvas');
             const scale = Math.min(1, 512 / video.videoWidth); // 限制最大宽度512px
             canvas.width = Math.floor(video.videoWidth * scale);
@@ -36,33 +71,62 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         video.addEventListener('canplay', setMediaMetadata);
-        // 如果视频已经加载完成（例如从缓存）
         if (video.readyState >= 2) {
             setMediaMetadata();
         }
     });
 
-    // ---------- 音频 Media Session ----------
+    // ---------- 音频 Media Session + 播放位置保存 ----------
     document.querySelectorAll('audio').forEach(audio => {
+        // 播放位置保存相关
+        const storageKey = `media-progress:${audio.src}`;
+
+        function saveProgress() {
+            if (!audio.currentTime || audio.duration && audio.currentTime === audio.duration) return;
+            localStorage.setItem(storageKey, audio.currentTime);
+        }
+
+        function restoreProgress() {
+            const saved = localStorage.getItem(storageKey);
+            if (saved) {
+                const time = parseFloat(saved);
+                if (!isNaN(time) && time > 0) {
+                    audio.currentTime = time;
+                }
+            }
+        }
+
+        let lastSave = 0;
+        function throttledSave() {
+            const now = Date.now();
+            if (now - lastSave > 3000) {
+                saveProgress();
+                lastSave = now;
+            }
+        }
+
+        audio.addEventListener('loadedmetadata', restoreProgress);
+        audio.addEventListener('timeupdate', throttledSave);
+        audio.addEventListener('play', throttledSave);
+        audio.addEventListener('pause', saveProgress);
+        audio.addEventListener('ended', saveProgress);
+
+        // --- 原有音频 Media Session 逻辑 ---
         function setAudioMetadata() {
             if (!('mediaSession' in navigator)) {
                 console.log('浏览器不支持 Media Session API');
                 return;
             }
 
-            // 标题：优先从音频详情页的 .detail-meta-title 获取，否则尝试 .detail-title
             const titleEl = document.querySelector('.detail-meta-title') || document.querySelector('.detail-title');
             const title = titleEl ? titleEl.textContent.trim() : 'Infinity Music';
 
-            // 艺术家
             const artistEl = document.querySelector('.detail-artist');
             const artist = artistEl ? artistEl.textContent.trim() : 'Infinity Music';
 
-            // 专辑
             const albumEl = document.querySelector('.detail-album');
             const album = albumEl ? albumEl.textContent.trim() : '';
 
-            // 封面
             let artwork = [];
             const coverImg = document.querySelector('.detail-cover');
             if (coverImg && coverImg.src) {
@@ -97,5 +161,14 @@ document.addEventListener('DOMContentLoaded', function () {
         if (audio.readyState >= 1) {
             setAudioMetadata();
         }
+    });
+
+    // ---------- 页面离开前保存所有媒体进度 ----------
+    window.addEventListener('beforeunload', () => {
+        document.querySelectorAll('audio, video').forEach(media => {
+            if (media.currentTime && !(media.duration && media.currentTime === media.duration)) {
+                localStorage.setItem(`media-progress:${media.src}`, media.currentTime);
+            }
+        });
     });
 });
