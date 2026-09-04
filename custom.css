@@ -1,0 +1,93 @@
+/* 全局变量：日夜模式自动切换 */
+:root {
+  --bg-color: #f5f5f7;
+  --text-color: #1d1d1f;
+  --link-color: #0066cc;
+  --link-hover: #004499;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: #1c1c1e;
+    --text-color: #e5e5e7;
+    --link-color: #64b5f6;
+    --link-hover: #afd8f9;
+  }
+}
+
+/* 基础样式 */
+body {
+  margin: 0;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+/* 卡片 */
+main {
+  display: grid;
+  place-items: center left;
+}
+
+/* 链接 */
+a {
+  color: var(--link-color);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+a:hover {
+  color: var(--link-hover);
+}
+
+/* 标题 */
+h1 {
+  font-weight: 600;
+}
+
+.home-res {
+  line-height: 0.2;
+  font-size: max(1.5vh, 1rem);
+}
+
+.detail-main {
+  display: flex;
+  /* 修正为有效值 */
+  flex-direction: column;
+  /* 如果内部是纵向排列 */
+  align-items: center;
+  /* 水平居中 */
+  margin-top: -20vh;
+  /* 上移，根据喜好调整 */
+}
+
+.detail-title {
+  font-weight: normal;
+  font-size: max(2vh, 1.5rem);
+}
+
+.detail-media {
+  max-width: 95%;
+  max-height: 60vh;
+  height: auto;
+}
+
+.detail-meta {
+  text-align: center;
+  font-size: max(1.2vh, 0.8rem);
+}
+
+.detail-cover {
+    max-width: 30vw;       /* 最大宽度 */
+    max-height: 30vh;      /* 最大高度 */
+    min-width: 64px;       /* 最小宽度 */
+    min-height: 64px;      /* 最小高度 */
+    height: auto;
+    width: auto;
+}
+
+.detail-choice {
+  font-size: max(2vh, 1.2rem);
+}

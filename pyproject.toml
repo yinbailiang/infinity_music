@@ -1,0 +1,82 @@
+[project]
+name = "infinity-music"
+version = "0.1.0"
+description = "一个简单的，免费的，音乐分发服务"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "pydantic",
+    "fastapi",
+    "infinity_data",
+    "uvicorn>=0.52.4",
+    "mutagen>=1.48.1",
+]
+
+
+[dependency-groups]
+# 测试组：仅运行测试所需（CI test job 只装这组，更快）
+test = [
+    "pyyaml",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+# 开发组：lint/类型/钩子 + 测试组（本地开发与 CI pre-commit job 装这组）
+dev = [
+    "ruff>=0.15.21",
+    "pyright",
+    "pre-commit>=4.0",
+    "interrogate>=1.7.0",
+    "httpx>=0.28.1",
+    { include-group = "test" },
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+infinity_data = ["py.typed"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "F",      # pyflakes
+    "I",      # isort
+    "ASYNC",  # async/await best practices
+    "PLE",    # pylint errors
+]
+ignore = [
+    "E501",     # line too long (handled by formatter)
+    "ASYNC109", # async function with timeout parameter (intentional API design)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["infinity_data"]
+
+[tool.ruff.format]
+indent-style = "space"
+quote-style = "single"
+line-ending = "lf"
+
+[tool.pyright]
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+reportMissingImports = "error"
+exclude = ["**/node_modules", "**/__pycache__", "**/.*", ".venv", "build"]
+venvPath = "."
+venv = ".venv"
+
+[tool.interrogate]
+fail-under = 60
+# 测试函数名自解释，docstring 可选；产品代码（src）不豁免
+ignore-regex = ["^test_"]
