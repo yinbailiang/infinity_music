@@ -23,7 +23,7 @@ import base64
 import json
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from infinity_music.music_meta import get_audio_metadata
 
@@ -77,8 +77,9 @@ class MetaManager:
         disk_path = self.cache_path_for(file_id)
         if disk_path is not None and disk_path.is_file():
             try:
-                data = json.loads(disk_path.read_text())
-                if isinstance(data, dict):
+                raw = json.loads(disk_path.read_text())
+                if isinstance(raw, dict):
+                    data = cast('dict[str, Any]', raw)
                     self._memory[file_id] = data
                     return dict(data)
             except (json.JSONDecodeError, OSError) as e:

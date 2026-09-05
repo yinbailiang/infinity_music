@@ -128,8 +128,10 @@ class ResourceManager:
             elif entry.is_file():
                 sha = self._path_to_id.get(path)
                 if sha is None:
-                    # 启动后新增的文件：实时计算一次（不写回缓存，保持简单）
+                    # 启动后新增的文件：实时计算并登记，保证 /detail、/media、/cover 可访问
                     sha = self._file_sha256(path)
+                    self._path_to_id[path] = sha
+                    self._id_to_path[sha] = path
                 files.append((path, sha))
         return subdirs, files
 

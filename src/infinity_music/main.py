@@ -65,7 +65,6 @@ def load_config(path: Path) -> AppConfig:
     raw = result.value
     server: dict[str, Any] = cast('dict[str, Any]', raw['server'])
     base = path.resolve().parent
-    raw_templates = raw.get('templates_dir')
     raw_meta_cache = raw.get('meta_cache')
     return AppConfig(
         host=cast(str, server['host']),
@@ -75,7 +74,7 @@ def load_config(path: Path) -> AppConfig:
         static_root=_resolve_path(base, raw['static_dir']),
         custom_css=_resolve_path(base, raw['ui_css']),
         custom_js=_resolve_path(base, raw['ui_js']),
-        templates_dir=_resolve_path(base, raw_templates) if isinstance(raw_templates, PurePath) else None,
+        templates_dir=_resolve_path(base, raw['templates_dir']),
         meta_cache=_resolve_path(base, raw_meta_cache) if isinstance(raw_meta_cache, PurePath) else None,
     )
 
