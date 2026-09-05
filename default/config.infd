@@ -5,7 +5,5 @@ server = {
 }
 media_dir = p"./res"
 static_dir = p"./static"
-ui_css = p"./custom.css"
-ui_js = p"./custom.js"
 templates_dir = p"./templates"
 meta_cache = p"./meta_cache"

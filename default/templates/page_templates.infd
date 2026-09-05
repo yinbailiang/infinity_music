@@ -11,11 +11,11 @@ home_page = ```
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg" />
+    <link rel="stylesheet" href="/static/custom.css" />
     <script src="/static/htmx.min.js"></script>
+    <script src="/static/custom.js" defer></script>
     <title>$app_name</title>
-    <style>$css</style>
 </head>
-<script>$js</script>
 <body class="home-body">
     <main class="home-main">
         <h1 class="home-title">$app_name</h1>
@@ -94,11 +94,11 @@ detail_page = ```
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg" />
+    <link rel="stylesheet" href="/static/custom.css" />
     <script src="/static/htmx.min.js"></script>
+    <script src="/static/custom.js" defer></script>
     <title>$file_name - $app_name</title>
-    <style>$css</style>
 </head>
-<script>$js</script>
 <body class="detail-body">
     <main class="detail-main">
         $content

@@ -17,7 +17,7 @@ TEMPLATE_FILE = 'page_templates.infd'
 class PageTemplates(BaseModel):
     """页面模板模型 — 字段对应 page_templates.infd 顶层的命名片段"""
 
-    home_page: str = Field(description='主页整页骨架（$app_name/$css/$js/$items）')
+    home_page: str = Field(description='主页整页骨架（$app_name/$items）')
     home_empty: str = Field(description='无资源时的占位片段')
     home_item: str = Field(description='主页单个资源链接项（$file_id/$name）')
     dir_item: str = Field(
@@ -25,7 +25,7 @@ class PageTemplates(BaseModel):
     )
     search_row: str = Field(description='默认置顶的虚拟搜索文件夹（含搜索框与结果容器）')
     detail_page: str = Field(
-        description='详情页整页骨架（$app_name/$file_name/$css/$js/$content/$file_id）'
+        description='详情页整页骨架（$app_name/$file_name/$content/$file_id）'
     )
     detail_loading: str = Field(description='详情页骨架占位，htmx 惰性加载容器（$file_id）')
     detail_video: str = Field(description='视频详情内容片段（$file_name/$file_id）')

@@ -8,8 +8,6 @@
     server: Server,
     media_dir: <path, dir>,
     static_dir: <path, dir>,
-    ui_css: <path, file>,
-    ui_js: <path, file>,
     templates_dir: <path, dir>,
     meta_cache: <path?, dir?> = noexist,
 }

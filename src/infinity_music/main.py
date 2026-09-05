@@ -42,8 +42,6 @@ class AppConfig:
     reload: bool
     res_root: Path
     static_root: Path
-    custom_css: Path
-    custom_js: Path
     templates_dir: Path
     meta_cache: Path | None = None
 
@@ -72,8 +70,6 @@ def load_config(path: Path) -> AppConfig:
         reload=cast(bool, server['reload']),
         res_root=_resolve_path(base, raw['media_dir']),
         static_root=_resolve_path(base, raw['static_dir']),
-        custom_css=_resolve_path(base, raw['ui_css']),
-        custom_js=_resolve_path(base, raw['ui_js']),
         templates_dir=_resolve_path(base, raw['templates_dir']),
         meta_cache=_resolve_path(base, raw_meta_cache) if isinstance(raw_meta_cache, PurePath) else None,
     )
@@ -96,11 +92,6 @@ CACHE_MEDIA = 'public, max-age=31536000, immutable'
 CACHE_STATIC = 'public, max-age=86400'
 CACHE_HOME = 'no-cache'
 CACHE_DETAIL = 'public, max-age=3600, s-maxage=86400'
-
-
-def _read_optional(path: Path) -> str:
-    """Read a file's text, returning '' if it does not exist."""
-    return path.read_text() if path.exists() else ''
 
 
 # 首页条目类型图标（stroke=currentColor，跟随日夜模式文字色）
@@ -196,7 +187,6 @@ def _render_children(
 
 def _render_home(
     renderer: PageRenderer,
-    config: AppConfig,
     manager: ResourceManager,
     meta_manager: MetaManager,
 ) -> str:
@@ -206,8 +196,6 @@ def _render_home(
     return renderer.render(
         'home_page',
         app_name=APP_NAME,
-        css=_read_optional(config.custom_css),
-        js=_read_optional(config.custom_js),
         items=items,
     )
 
@@ -246,7 +234,6 @@ def _render_detail(
     path: Path,
     file_id: str,
     renderer: PageRenderer,
-    config: AppConfig,
 ) -> str:
     """Render the detail-page shell; real content is lazy-loaded via htmx.
 
@@ -262,8 +249,6 @@ def _render_detail(
         app_name=APP_NAME,
         file_name=file_name,
         file_id=file_id,
-        css=_read_optional(config.custom_css),
-        js=_read_optional(config.custom_js),
         content=content,
     )
 
@@ -346,11 +331,10 @@ async def home(
     response: Response,
     manager: ResourceManager = Depends(get_manager),
     renderer: PageRenderer = Depends(get_renderer),
-    config: AppConfig = Depends(get_config),
     meta_manager: MetaManager = Depends(get_meta_manager),
 ) -> str:
     response.headers['Cache-Control'] = CACHE_HOME
-    return _render_home(renderer, config, manager, meta_manager)
+    return _render_home(renderer, manager, meta_manager)
 
 
 @router.get('/browse/{dir_path:path}', response_class=HTMLResponse)
@@ -399,7 +383,6 @@ async def resource_detail(
     file_id: str,
     manager: ResourceManager = Depends(get_manager),
     renderer: PageRenderer = Depends(get_renderer),
-    config: AppConfig = Depends(get_config),
 ) -> str:
     response.headers['Cache-Control'] = CACHE_DETAIL
     file_path = manager.get_by_id(file_id)
@@ -407,7 +390,7 @@ async def resource_detail(
         raise HTTPException(status_code=404)
     sha = manager.get_id(file_path)
     assert sha is not None  # get_by_id 命中则 id 必存在
-    return _render_detail(file_path, sha, renderer, config)
+    return _render_detail(file_path, sha, renderer)
 
 
 @router.get('/fragment/{file_id}', response_class=HTMLResponse)
