@@ -72,6 +72,21 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  /* 上下边缘渐变遮罩：内容在列表边界自然淡出 */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 0.75rem,
+    black calc(100% - 0.75rem),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 0.75rem,
+    black calc(100% - 0.75rem),
+    transparent 100%
+  );
 }
 
 /* 首页条目：flex 一行 = 图标 + (曲名 / 小字作者) */
