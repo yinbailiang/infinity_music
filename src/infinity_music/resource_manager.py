@@ -100,3 +100,42 @@ class ResourceManager:
     def get_id(self, path: Path) -> Optional[str]:
         """Return the ID for a given Path, or None if not found."""
         return self._path_to_id.get(path)
+
+    def list_dir(self, rel_dir: str = '') -> Tuple[List[str], List[Tuple[Path, str]]]:
+        """List one directory level under the media root.
+
+        Args:
+            rel_dir: 相对 media root 的目录（POSIX 风格，'' 表示根目录）。
+
+        Returns:
+            (subdir_names, file_items)，均按名称排序；隐藏条目已被过滤。
+        """
+        base = self.root if not rel_dir else self.root / rel_dir
+        subdirs: List[str] = []
+        files: List[Tuple[Path, str]] = []
+
+        if not base.is_dir():
+            return subdirs, files
+
+        entries = list(os.scandir(base))
+        entries.sort(key=lambda e: (not e.is_dir(), e.name.casefold()))
+        for entry in entries:
+            if entry.name.startswith('.'):
+                continue
+            path = Path(entry.path)
+            if entry.is_dir():
+                subdirs.append(entry.name)
+            elif entry.is_file():
+                sha = self._path_to_id.get(path)
+                if sha is None:
+                    # 启动后新增的文件：实时计算一次（不写回缓存，保持简单）
+                    sha = self._file_sha256(path)
+                files.append((path, sha))
+        return subdirs, files
+
+    def count_children(self, rel_dir: str = '') -> int:
+        """Count direct children (files + folders) of a media-root-relative dir."""
+        base = self.root if not rel_dir else self.root / rel_dir
+        if not base.is_dir():
+            return 0
+        return sum(1 for e in os.scandir(base) if not e.name.startswith('.'))

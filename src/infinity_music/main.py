@@ -12,7 +12,8 @@ import os
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path, PurePath
-from typing import Any, List, Tuple, cast
+from typing import Any, List, cast
+from urllib.parse import quote
 
 import uvicorn
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
@@ -122,61 +123,93 @@ _ICON_FILE = (
 )
 
 
-def _render_home(
-    resources: List[Tuple[Path, str]],
+def _render_file_item(
+    path: Path,
+    file_id: str,
     renderer: PageRenderer,
-    config: AppConfig,
     meta_manager: MetaManager,
 ) -> str:
-    """Render the home page listing every resource as a flex entry."""
-    if resources:
-        items = []
-        for path, sha in resources:
-            mime_type, _ = mimetypes.guess_type(path.name)
-            file_name = escape(path.name)
+    """Render one media file as a home/browse list entry (icon + title + artist)."""
+    mime_type, _ = mimetypes.guess_type(path.name)
+    file_name = escape(path.name)
 
-            if mime_type and mime_type.startswith('audio/'):
-                # 音频：复用 MetaManager 缓存（作者/曲名与详情页一致）
-                meta = meta_manager.get_or_build(path, sha)
-                title = meta.get('title') or path.stem
-                artist = meta.get('artist') or ''
-                if meta.get('artwork_b64'):
-                    # 有内嵌封面：展示缩略图（经 /cover 接口，immutable 缓存）
-                    icon = (
-                        f'<img class="home-item-thumb" src="/cover/{sha}" '
-                        f'alt="" loading="lazy" decoding="async" />'
-                    )
-                else:
-                    icon = _ICON_AUDIO
-            elif mime_type and mime_type.startswith('video/'):
-                title = path.stem
-                artist = ''
-                icon = _ICON_VIDEO
-            else:
-                title = path.stem
-                artist = ''
-                icon = _ICON_FILE
-
-            items.append(
-                renderer.render(
-                    'home_item',
-                    file_id=sha,
-                    file_name=file_name,
-                    title=escape(title),
-                    artist=escape(artist),
-                    icon=icon,
-                )
+    if mime_type and mime_type.startswith('audio/'):
+        meta = meta_manager.get_or_build(path, file_id)
+        title = meta.get('title') or path.stem
+        artist = meta.get('artist') or ''
+        if meta.get('artwork_b64'):
+            # 有内嵌封面：展示缩略图（经 /cover 接口，immutable 缓存）
+            icon = (
+                f'<img class="home-item-thumb" src="/cover/{file_id}" '
+                f'alt="" loading="lazy" decoding="async" />'
             )
-        items_html = ''.join(items)
+        else:
+            icon = _ICON_AUDIO
+    elif mime_type and mime_type.startswith('video/'):
+        title = path.stem
+        artist = ''
+        icon = _ICON_VIDEO
     else:
-        items_html = renderer.render('home_empty')
+        title = path.stem
+        artist = ''
+        icon = _ICON_FILE
+
+    return renderer.render(
+        'home_item',
+        file_id=file_id,
+        file_name=file_name,
+        title=escape(title),
+        artist=escape(artist),
+        icon=icon,
+    )
+
+
+def _render_children(
+    rel_dir: str,
+    manager: ResourceManager,
+    renderer: PageRenderer,
+    meta_manager: MetaManager,
+) -> str:
+    """Render one directory level: nested folder rows + media file entries.
+
+    文件夹行是 <details> + htmx（click once），其内容（更深层）由浏览器
+    首次展开时再向 /browse/{rel} 惰性请求，因此支持任意深度嵌套。
+    """
+    subdirs, files = manager.list_dir(rel_dir)
+    parts: List[str] = []
+
+    for dir_name in subdirs:
+        child_rel = dir_name if not rel_dir else f'{rel_dir}/{dir_name}'
+        parts.append(
+            renderer.render(
+                'dir_item',
+                dir_rel=quote(child_rel, safe='/'),
+                dir_name=escape(dir_name),
+                dir_count=str(manager.count_children(child_rel)),
+            )
+        )
+
+    for path, sha in files:
+        parts.append(_render_file_item(path, sha, renderer, meta_manager))
+
+    return ''.join(parts) if parts else renderer.render('home_empty')
+
+
+def _render_home(
+    renderer: PageRenderer,
+    config: AppConfig,
+    manager: ResourceManager,
+    meta_manager: MetaManager,
+) -> str:
+    """Render the home page: top-level folders + root files (folder view)."""
+    items = _render_children('', manager, renderer, meta_manager)
 
     return renderer.render(
         'home_page',
         app_name=APP_NAME,
         css=_read_optional(config.custom_css),
         js=_read_optional(config.custom_js),
-        items=items_html,
+        items=items,
     )
 
 
@@ -288,7 +321,25 @@ async def home(
     meta_manager: MetaManager = Depends(get_meta_manager),
 ) -> str:
     response.headers['Cache-Control'] = CACHE_HOME
-    return _render_home(manager.resources, renderer, config, meta_manager)
+    return _render_home(renderer, config, manager, meta_manager)
+
+
+@router.get('/browse/{dir_path:path}', response_class=HTMLResponse)
+async def browse_dir(
+    response: Response,
+    dir_path: str,
+    manager: ResourceManager = Depends(get_manager),
+    renderer: PageRenderer = Depends(get_renderer),
+    meta_manager: MetaManager = Depends(get_meta_manager),
+) -> str:
+    """htmx 文件夹惰性加载片段：返回该目录下的子文件夹 + 媒体条目。"""
+    response.headers['Cache-Control'] = CACHE_HOME
+    root = manager.root.resolve()
+    target = (root / dir_path).resolve()
+    if not target.is_relative_to(root) or not target.is_dir():
+        raise HTTPException(status_code=404)
+    rel = target.relative_to(root).as_posix()
+    return _render_children(rel, manager, renderer, meta_manager)
 
 
 @router.get('/detail/{file_id}', response_class=HTMLResponse)

@@ -20,6 +20,9 @@ class PageTemplates(BaseModel):
     home_page: str = Field(description='主页整页骨架（$app_name/$css/$js/$items）')
     home_empty: str = Field(description='无资源时的占位片段')
     home_item: str = Field(description='主页单个资源链接项（$file_id/$name）')
+    dir_item: str = Field(
+        description='文件夹行（htmx 惰性展开，$dir_rel/$dir_name/$dir_count）'
+    )
     detail_page: str = Field(
         description='详情页整页骨架（$app_name/$file_name/$css/$js/$content/$file_id）'
     )

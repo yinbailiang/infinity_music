@@ -451,3 +451,87 @@ audio.detail-media {
 .detail-loading-text {
   margin: 0;
 }
+
+/* =====================================================================
+   文件夹视图：<details> 行 + 递归缩进线，htmx 惰性加载子层
+   ===================================================================== */
+.dir-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 12px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-color);
+  list-style: none; /* 去掉 <details> 默认三角 */
+  transition: background-color 0.15s ease;
+}
+
+.dir-summary::-webkit-details-marker {
+  display: none;
+}
+
+.dir-summary:hover {
+  background: color-mix(in srgb, var(--text-color) 10%, transparent);
+}
+
+.dir-summary:focus-visible {
+  outline: 2px solid var(--link-color);
+  outline-offset: 2px;
+}
+
+.dir-caret {
+  flex: none;
+  width: 0.9rem;
+  height: 0.9rem;
+  opacity: 0.55;
+  transition: transform 0.15s ease;
+}
+
+.dir[open] > .dir-summary .dir-caret {
+  transform: rotate(90deg);
+}
+
+.dir-ico {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--link-color);
+}
+
+.dir-name {
+  font-size: max(1.5vh, 0.95rem);
+  font-weight: 500;
+}
+
+.dir-count {
+  margin-left: auto;
+  font-size: max(1.2vh, 0.72rem);
+  opacity: 0.5;
+  white-space: nowrap;
+}
+
+/* 子层：缩进 + 左侧层级线，内容由 htmx 惰性填充 */
+.dir-children {
+  margin: 0.2rem 0 0.25rem 1.1rem;
+  padding-left: 0.9rem;
+  border-left: 1px solid color-mix(in srgb, var(--text-color) 16%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.dir-children .home-item,
+.dir-children .dir-summary {
+  padding: 0.4rem 0.6rem;
+}
+
+.dir-children .home-item-icon {
+  width: 2.1rem;
+  height: 2.1rem;
+}
+
+.dir-children .dir-children {
+  margin-left: 1rem;
+}

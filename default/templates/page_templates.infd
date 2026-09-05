@@ -11,6 +11,7 @@ home_page = ```
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg" />
+    <script src="/static/htmx.min.js"></script>
     <title>$app_name</title>
     <style>$css</style>
 </head>
@@ -36,6 +37,22 @@ home_item = ```
         <span class="home-item-artist">$artist</span>
     </span>
 </a>
+```
+
+dir_item = ```
+<details class="dir">
+    <summary class="dir-summary"
+             hx-get="/browse/$dir_rel"
+             hx-target="next .dir-children"
+             hx-swap="innerHTML"
+             hx-trigger="click once">
+        <svg class="dir-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg class="dir-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span class="dir-name">$dir_name</span>
+        <span class="dir-count">$dir_count</span>
+    </summary>
+    <div class="dir-children"></div>
+</details>
 ```
 
 detail_loading = ```
