@@ -48,7 +48,8 @@ h1 {
 }
 
 .home-main {
-  width: min(46rem, 100%);
+  width: 95vw;
+  max-width: 50rem;
   height: 92vh;
   box-sizing: border-box;
   display: flex;
@@ -552,8 +553,8 @@ audio.detail-media {
    ===================================================================== */
 @media (max-width: 768px), (pointer: coarse) {
   .home-main {
-    width: 100%;
-    max-width: 100%;
+    width: 95vw;
+    max-width: 50rem;
     height: 100vh;
     height: 100dvh;
     padding: 0.6rem 0.4rem;
