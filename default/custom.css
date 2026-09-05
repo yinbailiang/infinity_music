@@ -48,13 +48,14 @@ h1 {
 }
 
 .home-main {
-  width: min(46rem, 94vw);
+  width: min(46rem, 100%);
   height: 92vh;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
   gap: 0.6rem;
-  padding: 1.5rem 0;
+  padding: 1.25rem 0.9rem;
 }
 
 .home-title {
@@ -71,6 +72,8 @@ h1 {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
   gap: 0.35rem;
   /* 上下边缘渐变遮罩：内容在列表边界自然淡出 */
   -webkit-mask-image: linear-gradient(
@@ -89,11 +92,13 @@ h1 {
   );
 }
 
-/* 首页条目：flex 一行 = 图标 + (曲名 / 小字作者) */
+/* 首页条目：flex 一行 = 图标 + (曲名 / 小字作者)，撑满整行宽度 */
 .home-item {
   display: flex;
   align-items: center;
   gap: 0.9rem;
+  width: 100%;
+  box-sizing: border-box;
   padding: 0.5rem 0.75rem;
   border-radius: 12px;
   color: var(--text-color);
@@ -169,6 +174,8 @@ h1 {
   text-align: center;
   color: var(--text-color);
   opacity: 0.55;
+  margin: 0.5rem 0;
+  padding: 1rem 0;
 }
 
 .detail-main {
@@ -455,6 +462,10 @@ audio.detail-media {
 /* =====================================================================
    文件夹视图：<details> 行 + 递归缩进线，htmx 惰性加载子层
    ===================================================================== */
+.dir {
+  width: 100%;
+}
+
 .dir-summary {
   display: flex;
   align-items: center;
@@ -534,4 +545,27 @@ audio.detail-media {
 
 .dir-children .dir-children {
   margin-left: 1rem;
+}
+
+/* =====================================================================
+   移动端 / 触屏：主页占满屏幕宽度，减少留白
+   ===================================================================== */
+@media (max-width: 768px), (pointer: coarse) {
+  .home-main {
+    width: 100%;
+    max-width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    padding: 0.6rem 0.4rem;
+  }
+
+  .home-item,
+  .dir-summary {
+    padding: 0.55rem 0.6rem;
+  }
+
+  .dir-children {
+    margin-left: 0.8rem;
+    padding-left: 0.6rem;
+  }
 }
