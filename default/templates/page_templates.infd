@@ -34,7 +34,7 @@ home_item = ```
 
 detail_loading = ```
 <div class="detail-loading" id="media-content"
-     hx-get="/fragment/$file_id" hx-trigger="load" hx-swap="innerHTML">
+     hx-get="/fragment/$file_id" hx-trigger="load" hx-swap="outerHTML">
     <p class="detail-loading-text">Loading…</p>
 </div>
 ```
