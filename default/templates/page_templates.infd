@@ -18,18 +18,24 @@ home_page = ```
 <body class="home-body">
     <main class="home-main">
         <h1 class="home-title">$app_name</h1>
-        $items
+        <div class="home-list">$items</div>
     </main>
 </body>
 </html>
 ```
 
 home_empty = ```
-<p class="home-res">Nothing</p>
+<p class="home-empty">Nothing</p>
 ```
 
 home_item = ```
-<p class="home-res"><a href="/detail/$file_id">$file_name</a></p>
+<a class="home-item" href="/detail/$file_id" title="$file_name">
+    <span class="home-item-icon">$icon</span>
+    <span class="home-item-info">
+        <span class="home-item-name">$title</span>
+        <span class="home-item-artist">$artist</span>
+    </span>
+</a>
 ```
 
 detail_loading = ```

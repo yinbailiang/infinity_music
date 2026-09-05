@@ -103,26 +103,73 @@ def _read_optional(path: Path) -> str:
     return path.read_text() if path.exists() else ''
 
 
+# 首页条目类型图标（stroke=currentColor，跟随日夜模式文字色）
+_ICON_AUDIO = (
+    '<svg class="home-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
+    '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
+)
+_ICON_VIDEO = (
+    '<svg class="home-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
+    '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>'
+)
+_ICON_FILE = (
+    '<svg class="home-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
+    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>'
+    '<polyline points="14 2 14 8 20 8"/></svg>'
+)
+
+
 def _render_home(
     resources: List[Tuple[Path, str]],
     renderer: PageRenderer,
     config: AppConfig,
+    meta_manager: MetaManager,
 ) -> str:
-    """Render the home page listing every resource."""
+    """Render the home page listing every resource as a flex entry."""
     if resources:
-        items = ''.join(
-            renderer.render('home_item', file_id=sha, file_name=escape(path.name))
-            for path, sha in resources
-        )
+        items = []
+        for path, sha in resources:
+            mime_type, _ = mimetypes.guess_type(path.name)
+            file_name = escape(path.name)
+
+            if mime_type and mime_type.startswith('audio/'):
+                # 音频：复用 MetaManager 缓存（作者/曲名与详情页一致）
+                meta = meta_manager.get_or_build(path, sha)
+                title = meta.get('title') or path.stem
+                artist = meta.get('artist') or ''
+                icon = _ICON_AUDIO
+            elif mime_type and mime_type.startswith('video/'):
+                title = path.stem
+                artist = ''
+                icon = _ICON_VIDEO
+            else:
+                title = path.stem
+                artist = ''
+                icon = _ICON_FILE
+
+            items.append(
+                renderer.render(
+                    'home_item',
+                    file_id=sha,
+                    file_name=file_name,
+                    title=escape(title),
+                    artist=escape(artist),
+                    icon=icon,
+                )
+            )
+        items_html = ''.join(items)
     else:
-        items = renderer.render('home_empty')
+        items_html = renderer.render('home_empty')
 
     return renderer.render(
         'home_page',
         app_name=APP_NAME,
         css=_read_optional(config.custom_css),
         js=_read_optional(config.custom_js),
-        items=items,
+        items=items_html,
     )
 
 
@@ -231,9 +278,10 @@ async def home(
     manager: ResourceManager = Depends(get_manager),
     renderer: PageRenderer = Depends(get_renderer),
     config: AppConfig = Depends(get_config),
+    meta_manager: MetaManager = Depends(get_meta_manager),
 ) -> str:
     response.headers['Cache-Control'] = CACHE_HOME
-    return _render_home(manager.resources, renderer, config)
+    return _render_home(manager.resources, renderer, config, meta_manager)
 
 
 @router.get('/detail/{file_id}', response_class=HTMLResponse)

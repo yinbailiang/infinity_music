@@ -47,9 +47,98 @@ h1 {
   font-weight: 600;
 }
 
-.home-res {
-  line-height: 0.2;
-  font-size: max(1.5vh, 1rem);
+.home-main {
+  width: min(46rem, 94vw);
+  max-height: 92vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.5rem 0;
+}
+
+.home-title {
+  text-align: left;
+  margin: 0 0 0.4rem;
+  font-size: max(2.4vh, 1.6rem);
+}
+
+.home-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+/* 首页条目：flex 一行 = 图标 + (曲名 / 小字作者) */
+.home-item {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 12px;
+  color: var(--text-color);
+  transition: background-color 0.15s ease;
+}
+
+.home-item:hover {
+  background: color-mix(in srgb, var(--text-color) 10%, transparent);
+  color: var(--text-color);
+}
+
+.home-item:focus-visible {
+  outline: 2px solid var(--link-color);
+  outline-offset: 2px;
+}
+
+.home-item-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text-color) 10%, transparent);
+  color: var(--link-color);
+}
+
+.home-ico {
+  width: 1.3rem;
+  height: 1.3rem;
+}
+
+.home-item-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.home-item-name {
+  font-size: max(1.6vh, 0.98rem);
+  font-weight: 500;
+  color: var(--text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-item-artist {
+  font-size: max(1.2vh, 0.74rem);
+  color: var(--text-color);
+  opacity: 0.62;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-item-artist:empty {
+  display: none;
+}
+
+.home-empty {
+  text-align: center;
+  color: var(--text-color);
+  opacity: 0.55;
 }
 
 .detail-main {
