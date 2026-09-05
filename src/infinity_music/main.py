@@ -140,7 +140,14 @@ def _render_home(
                 meta = meta_manager.get_or_build(path, sha)
                 title = meta.get('title') or path.stem
                 artist = meta.get('artist') or ''
-                icon = _ICON_AUDIO
+                if meta.get('artwork_b64'):
+                    # 有内嵌封面：展示缩略图（经 /cover 接口，immutable 缓存）
+                    icon = (
+                        f'<img class="home-item-thumb" src="/cover/{sha}" '
+                        f'alt="" loading="lazy" decoding="async" />'
+                    )
+                else:
+                    icon = _ICON_AUDIO
             elif mime_type and mime_type.startswith('video/'):
                 title = path.stem
                 artist = ''
