@@ -23,6 +23,7 @@ class PageTemplates(BaseModel):
     dir_item: str = Field(
         description='文件夹行（htmx 惰性展开，$dir_rel/$dir_name/$dir_count）'
     )
+    search_row: str = Field(description='默认置顶的虚拟搜索文件夹（含搜索框与结果容器）')
     detail_page: str = Field(
         description='详情页整页骨架（$app_name/$file_name/$css/$js/$content/$file_id）'
     )

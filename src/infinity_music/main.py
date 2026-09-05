@@ -12,7 +12,7 @@ import os
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path, PurePath
-from typing import Any, List, cast
+from typing import Any, List, Tuple, cast
 from urllib.parse import quote
 
 import uvicorn
@@ -201,8 +201,8 @@ def _render_home(
     manager: ResourceManager,
     meta_manager: MetaManager,
 ) -> str:
-    """Render the home page: top-level folders + root files (folder view)."""
-    items = _render_children('', manager, renderer, meta_manager)
+    """Render the home page: virtual Search folder + top-level folders/files."""
+    items = renderer.render('search_row') + _render_children('', manager, renderer, meta_manager)
 
     return renderer.render(
         'home_page',
@@ -211,6 +211,36 @@ def _render_home(
         js=_read_optional(config.custom_js),
         items=items,
     )
+
+
+def _search_matches(
+    query: str,
+    manager: ResourceManager,
+    meta_manager: MetaManager,
+) -> List[Tuple[Path, str]]:
+    """Advanced search: filename/path + audio tags (title/artist/album).
+
+    音频元数据经 MetaManager 惰性构建并缓存；首次搜索会一次性补全全库缓存，
+    之后读取磁盘 JSON 快速匹配。多个关键词需同时命中。
+    """
+    tokens = query.split()
+    results: List[Tuple[Path, str]] = []
+    for path, sha in manager.resources:
+        fields = [path.stem, path.relative_to(manager.root).as_posix()]
+        mime_type, _ = mimetypes.guess_type(path.name)
+        if mime_type and mime_type.startswith('audio/'):
+            meta = meta_manager.get_or_build(path, sha)
+            fields.extend(
+                [
+                    str(meta.get('title') or ''),
+                    str(meta.get('artist') or ''),
+                    str(meta.get('album') or ''),
+                ]
+            )
+        blob = ' '.join(fields).casefold()
+        if all(tok in blob for tok in tokens):
+            results.append((path, sha))
+    return results
 
 
 def _render_detail(
@@ -340,6 +370,28 @@ async def browse_dir(
         raise HTTPException(status_code=404)
     rel = target.relative_to(root).as_posix()
     return _render_children(rel, manager, renderer, meta_manager)
+
+
+@router.get('/search', response_class=HTMLResponse)
+async def search_media(
+    response: Response,
+    q: str = '',
+    manager: ResourceManager = Depends(get_manager),
+    renderer: PageRenderer = Depends(get_renderer),
+    meta_manager: MetaManager = Depends(get_meta_manager),
+) -> str:
+    """htmx 实时搜索片段：匹配文件名/路径 + 音频曲名/作者/专辑。"""
+    response.headers['Cache-Control'] = CACHE_HOME
+    query = q.strip().casefold()
+    if not query:
+        return ''
+
+    matched = _search_matches(query, manager, meta_manager)
+    if not matched:
+        return renderer.render('home_empty')
+    return ''.join(
+        _render_file_item(path, sha, renderer, meta_manager) for path, sha in matched
+    )
 
 
 @router.get('/detail/{file_id}', response_class=HTMLResponse)

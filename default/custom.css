@@ -592,3 +592,63 @@ audio.detail-media {
     padding-left: 0.6rem;
   }
 }
+
+/* =====================================================================
+   虚拟 Search 文件夹：搜索框 + 实时结果
+   ===================================================================== */
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-box-ico {
+  position: absolute;
+  left: 0.65rem;
+  width: 1rem;
+  height: 1rem;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.45rem 0.7rem 0.45rem 2rem;
+  border: 1px solid color-mix(in srgb, var(--text-color) 22%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text-color) 6%, transparent);
+  color: var(--text-color);
+  font: inherit;
+  font-size: max(1.4vh, 0.88rem);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.search-input::placeholder {
+  color: var(--text-color);
+  opacity: 0.45;
+}
+
+.search-input:focus {
+  border-color: var(--link-color);
+}
+
+/* type=search 自带的清除按钮跟随文字色 */
+.search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 0.9rem;
+  width: 0.9rem;
+  cursor: pointer;
+  background: currentColor;
+  opacity: 0.4;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
