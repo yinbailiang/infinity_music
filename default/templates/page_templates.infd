@@ -1,0 +1,119 @@
+# Infinity Music profile 模板（完整片段集，不再依赖内置默认模板）
+# - 下载/返回为纯 SVG 图标，播放器为自绘极简控制条；
+# - 详情页为骨架 + htmx 惰性加载内容片段（/fragment、/cover）；
+# - 站点图标使用 static/icons/favicon.svg。
+# 所有片段必须保留各自 $var 占位，避免样式丢失。
+
+home_page = ```
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg" />
+    <title>$app_name</title>
+    <style>$css</style>
+</head>
+<script>$js</script>
+<body class="home-body">
+    <main class="home-main">
+        <h1 class="home-title">$app_name</h1>
+        $items
+    </main>
+</body>
+</html>
+```
+
+home_empty = ```
+<p class="home-res">Nothing</p>
+```
+
+home_item = ```
+<p class="home-res"><a href="/detail/$file_id">$file_name</a></p>
+```
+
+detail_loading = ```
+<div class="detail-loading" id="media-content"
+     hx-get="/fragment/$file_id" hx-trigger="load" hx-swap="innerHTML">
+    <p class="detail-loading-text">Loading…</p>
+</div>
+```
+
+detail_page = ```
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg" />
+    <script src="/static/htmx.min.js"></script>
+    <title>$file_name - $app_name</title>
+    <style>$css</style>
+</head>
+<script>$js</script>
+<body class="detail-body">
+    <main class="detail-main">
+        $content
+        <nav class="detail-actions" aria-label="页面操作">
+            <a class="detail-icon" href="/media/$file_id" aria-label="下载" title="下载">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+            </a>
+            <a class="detail-icon" href="/" aria-label="返回" title="返回">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                    <line x1="19" y1="12" x2="5" y2="12" />
+                    <polyline points="12 19 5 12 12 5" />
+                </svg>
+            </a>
+        </nav>
+    </main>
+</body>
+</html>
+```
+
+detail_video = ```
+<h1 class="detail-title">$file_name</h1>
+<video class="detail-media" src="/media/$file_id" controls preload="metadata" loop autoplay></video>
+```
+
+detail_audio = ```
+<div class="detail-meta">
+    $cover
+    <div class="detail-meta-text">
+        <p class="detail-meta-title">$meta_title</p>
+        <p class="detail-artist">$meta_artist</p>
+        <p class="detail-album">$meta_album</p>
+    </div>
+</div>
+<div class="player-wrap">
+    <audio class="detail-media" src="/media/$file_id" preload="metadata" loop autoplay></audio>
+    <div class="player">
+        <button type="button" class="player-toggle" aria-label="播放" title="播放">
+            <svg class="player-ico player-ico-play" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                <polygon points="7 5 7 19 18 12" />
+            </svg>
+            <svg class="player-ico player-ico-pause" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                <rect x="6" y="4" width="4" height="16" rx="1.2" />
+                <rect x="14" y="4" width="4" height="16" rx="1.2" />
+            </svg>
+        </button>
+        <div class="player-track" aria-hidden="true">
+            <div class="player-track-bar">
+                <div class="player-fill"></div>
+            </div>
+        </div>
+        <span class="player-time">0:00 / 0:00</span>
+    </div>
+</div>
+```
+
+detail_cover = ```
+<img class="detail-cover" src="/cover/$file_id" alt="Cover" />
+```
+
+detail_other = ```
+<h1 class="detail-title">$file_name</h1>
+```

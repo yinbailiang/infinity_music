@@ -7,7 +7,6 @@ line, compiles it, then builds the dependency graph (config -> ResourceManager
 """
 
 import argparse
-import base64
 import mimetypes
 import os
 from dataclasses import dataclass
@@ -16,17 +15,21 @@ from pathlib import Path, PurePath
 from typing import Any, List, Tuple, cast
 
 import uvicorn
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse
-from infinity_data import Schema, load
+from infinity_data import SandboxConfig, Schema, load
 
-from infinity_music.music_meta import get_audio_metadata
+from infinity_music.meta_manager import MetaManager
 from infinity_music.resource_manager import ResourceManager
+from infinity_music.templates import PageRenderer, load_page_templates
 
 # ---------------------------------------------------------------------------
-# Configuration model（.infd，InfinityData 语言）
+# Configuration model（.infd 数据 + 包内 schemas.inft 结构校验）
 # ---------------------------------------------------------------------------
-CONFIG_SCHEMA = Schema(template='AppConfig', mode='strict')
+SCHEMA_FILE = Path(__file__).resolve().parent / 'assets' / 'schemas.inft'
+CONFIG_SCHEMA = Schema(template='AppConfig', from_file=str(SCHEMA_FILE), mode='strict')
+# dir/file 文件系统约束与外部模板导入需要访问本机文件系统
+CONFIG_SANDBOX = SandboxConfig.full_access()
 
 
 @dataclass(frozen=True)
@@ -40,6 +43,8 @@ class AppConfig:
     static_root: Path
     custom_css: Path
     custom_js: Path
+    templates_dir: Path
+    meta_cache: Path | None = None
 
 
 def _resolve_path(base: Path, value: PurePath) -> Path:
@@ -51,7 +56,7 @@ def _resolve_path(base: Path, value: PurePath) -> Path:
 
 def load_config(path: Path) -> AppConfig:
     """Compile the .infd config at *path*; raise RuntimeError on failure."""
-    result = load(path, schema=CONFIG_SCHEMA)
+    result = load(path, schema=CONFIG_SCHEMA, sandbox=CONFIG_SANDBOX)
     if result.has_errors:
         details = '\n'.join(f'  {d.code}: {d.message}' for d in result.diagnostics)
         raise RuntimeError(f'配置 {path} 编译失败:\n{details}')
@@ -59,6 +64,8 @@ def load_config(path: Path) -> AppConfig:
     raw = result.value
     server: dict[str, Any] = cast('dict[str, Any]', raw['server'])
     base = path.resolve().parent
+    raw_templates = raw.get('templates_dir')
+    raw_meta_cache = raw.get('meta_cache')
     return AppConfig(
         host=cast(str, server['host']),
         port=cast(int, server['port']),
@@ -67,104 +74,121 @@ def load_config(path: Path) -> AppConfig:
         static_root=_resolve_path(base, raw['static_dir']),
         custom_css=_resolve_path(base, raw['ui_css']),
         custom_js=_resolve_path(base, raw['ui_js']),
+        templates_dir=_resolve_path(base, raw_templates) if isinstance(raw_templates, PurePath) else None,
+        meta_cache=_resolve_path(base, raw_meta_cache) if isinstance(raw_meta_cache, PurePath) else None,
     )
 
 
 # ---------------------------------------------------------------------------
 # HTML helpers（纯函数，无全局状态）
 # ---------------------------------------------------------------------------
+APP_NAME = 'Infinity Music'
+
+# 分层缓存策略：
+# - MEDIA：/media/{id} 的 id 是文件内容 SHA-256（内容寻址），URL 永不失效 → immutable 长缓存
+# - STATIC：/static/{path} 按路径寻址，作者可能覆盖同名文件 → 短缓存，过期后靠
+#   FileResponse 自带的 ETag/Last-Modified 做条件复验
+# - HOME：/ 是聚合列表，加删资源即变且 URL 不变 → 不缓存
+# - DETAIL：/detail/{id} 由内容哈希寻址，页面只取决于媒体元数据（随文件哈希固定）
+#   与站点皮肤（模板/CSS/JS，仅部署时变更）→ 可给中长缓存。max-age 让浏览器较快
+#   拿到改版后的皮肤，s-maxage 让 CDN 驻留更久、分担回源
+CACHE_MEDIA = 'public, max-age=31536000, immutable'
+CACHE_STATIC = 'public, max-age=86400'
+CACHE_HOME = 'no-cache'
+CACHE_DETAIL = 'public, max-age=3600, s-maxage=86400'
+
+
 def _read_optional(path: Path) -> str:
     """Read a file's text, returning '' if it does not exist."""
     return path.read_text() if path.exists() else ''
 
 
-def _render_home(resources: List[Tuple[Path, str]], config: AppConfig) -> str:
+def _render_home(
+    resources: List[Tuple[Path, str]],
+    renderer: PageRenderer,
+    config: AppConfig,
+) -> str:
     """Render the home page listing every resource."""
-    if not resources:
-        body = '<p class="home-res">Nothing</p>'
-    else:
-        body = ''.join(
-            f'<p class="home-res"><a href="/detail/{sha}">{escape(path.name)}</a></p>'
+    if resources:
+        items = ''.join(
+            renderer.render('home_item', file_id=sha, file_name=escape(path.name))
             for path, sha in resources
         )
+    else:
+        items = renderer.render('home_empty')
 
-    return f"""<!doctype html>
-<html lang="zh-Hans">
-<head>
-    <meta charset="utf-8" />
-    <title>Infinity Music</title>
-    <style>{_read_optional(config.custom_css)}</style>
-</head>
-<script>{_read_optional(config.custom_js)}</script>
-<body class="home-body">
-    <main class="home-main">
-        <h1 class="home-title">Infinity Music</h1>
-        {body}
-    </main>
-</body>
-</html>
-"""
+    return renderer.render(
+        'home_page',
+        app_name=APP_NAME,
+        css=_read_optional(config.custom_css),
+        js=_read_optional(config.custom_js),
+        items=items,
+    )
 
 
-def _render_detail(path: Path, file_id: str, config: AppConfig) -> str:
-    """Render the detail page for one media file."""
+def _render_detail(
+    path: Path,
+    file_id: str,
+    renderer: PageRenderer,
+    config: AppConfig,
+) -> str:
+    """Render the detail-page shell; real content is lazy-loaded via htmx.
+
+    The media meta/player fragment lives behind ``/fragment/{file_id}`` and is
+    pulled in by htmx on load, so audio metadata parsing happens only when a
+    resource is actually viewed (and is cached by MetaManager afterwards).
+    """
+    file_name = escape(path.name)
+    content = renderer.render('detail_loading', file_id=file_id)
+
+    return renderer.render(
+        'detail_page',
+        app_name=APP_NAME,
+        file_name=file_name,
+        file_id=file_id,
+        css=_read_optional(config.custom_css),
+        js=_read_optional(config.custom_js),
+        content=content,
+    )
+
+
+def _render_fragment(
+    path: Path,
+    file_id: str,
+    renderer: PageRenderer,
+    meta_manager: MetaManager,
+) -> str:
+    """Render the htmx content fragment for one media file.
+
+    - video -> native ``<video>`` player fragment
+    - audio -> metadata (lazily computed & cached by MetaManager) + player
+    - other -> plain title fragment
+    """
+    file_name = escape(path.name)
     mime_type, _ = mimetypes.guess_type(path.name)
 
     if mime_type and mime_type.startswith('video/'):
-        title = f'<h1 class="detail-title">{escape(path.name)}</h1>'
-        player = (
-            f'<video class="detail-media" src="/media/{file_id}" controls '
-            'preload="metadata" loop autoplay></video>'
+        return renderer.render('detail_video', file_name=file_name, file_id=file_id)
+
+    if mime_type and mime_type.startswith('audio/'):
+        meta = meta_manager.get_or_build(path, file_id)
+        meta_title = escape(meta.get('title') or path.stem)
+        meta_artist = escape(meta.get('artist') or 'Unknown Artist')
+        meta_album = escape(meta.get('album') or '')
+
+        cover = ''
+        if meta.get('artwork_b64'):
+            cover = renderer.render('detail_cover', file_id=file_id)
+        return renderer.render(
+            'detail_audio',
+            cover=cover,
+            meta_title=meta_title,
+            meta_artist=meta_artist,
+            meta_album=meta_album,
+            file_id=file_id,
         )
-    elif mime_type and mime_type.startswith('audio/'):
-        # 音频：解析标签，内嵌封面图
-        meta = get_audio_metadata(path)
-        meta_title = meta.get('title') or path.stem
-        meta_artist = meta.get('artist') or 'Unknown Artist'
-        meta_album = meta.get('album') or ''
 
-        artwork = ''
-        if meta.get('artwork_data'):
-            artwork_b64 = base64.b64encode(meta['artwork_data']).decode()
-            artwork_mime = meta.get('artwork_mime') or 'image/jpeg'
-            artwork = (
-                f'<img class="detail-cover" src="data:{artwork_mime};base64,'
-                f'{artwork_b64}" alt="Cover" />'
-            )
-
-        title = ''
-        player = f"""<div class="detail-meta">
-    {artwork}
-    <div class="detail-meta-text">
-        <p class="detail-meta-title">{escape(meta_title)}</p>
-        <p class="detail-artist">{escape(meta_artist)}</p>
-        <p class="detail-album">{escape(meta_album)}</p>
-    </div>
-</div>
-<audio class="detail-media" src="/media/{file_id}" controls preload="metadata" loop autoplay></audio>
-"""
-    else:
-        title = f'<h1 class="detail-title">{escape(path.name)}</h1>'
-        player = ''
-
-    return f"""<!doctype html>
-<html lang="zh-Hans">
-<head>
-    <meta charset="utf-8" />
-    <title>{escape(path.name)} - Infinity Music</title>
-    <style>{_read_optional(config.custom_css)}</style>
-</head>
-<script>{_read_optional(config.custom_js)}</script>
-<body class="detail-body">
-    <main class="detail-main">
-        {title}
-        {player}
-        <a class="detail-choice" href="/media/{file_id}">Download</a>
-        <a class="detail-choice" href="/">Back</a>
-    </main>
-</body>
-</html>
-"""
+    return renderer.render('detail_other', file_name=file_name)
 
 
 # ---------------------------------------------------------------------------
@@ -187,26 +211,90 @@ def get_manager(request: Request) -> ResourceManager:
     return manager
 
 
+def get_renderer(request: Request) -> PageRenderer:
+    """FastAPI dependency: the PageRenderer stored on app.state."""
+    renderer = request.app.state.page_renderer
+    assert isinstance(renderer, PageRenderer)
+    return renderer
+
+
+def get_meta_manager(request: Request) -> MetaManager:
+    """FastAPI dependency: the MetaManager stored on app.state."""
+    meta_manager = request.app.state.meta_manager
+    assert isinstance(meta_manager, MetaManager)
+    return meta_manager
+
+
 @router.get('/', response_class=HTMLResponse)
 async def home(
+    response: Response,
     manager: ResourceManager = Depends(get_manager),
+    renderer: PageRenderer = Depends(get_renderer),
     config: AppConfig = Depends(get_config),
 ) -> str:
-    return _render_home(manager.resources, config)
+    response.headers['Cache-Control'] = CACHE_HOME
+    return _render_home(manager.resources, renderer, config)
 
 
 @router.get('/detail/{file_id}', response_class=HTMLResponse)
 async def resource_detail(
+    response: Response,
     file_id: str,
     manager: ResourceManager = Depends(get_manager),
+    renderer: PageRenderer = Depends(get_renderer),
     config: AppConfig = Depends(get_config),
 ) -> str:
+    response.headers['Cache-Control'] = CACHE_DETAIL
     file_path = manager.get_by_id(file_id)
     if file_path is None:
         raise HTTPException(status_code=404)
     sha = manager.get_id(file_path)
     assert sha is not None  # get_by_id 命中则 id 必存在
-    return _render_detail(file_path, sha, config)
+    return _render_detail(file_path, sha, renderer, config)
+
+
+@router.get('/fragment/{file_id}', response_class=HTMLResponse)
+async def media_fragment(
+    response: Response,
+    file_id: str,
+    manager: ResourceManager = Depends(get_manager),
+    renderer: PageRenderer = Depends(get_renderer),
+    meta_manager: MetaManager = Depends(get_meta_manager),
+) -> str:
+    """htmx 惰性加载的内容片段（音频 meta / 视频 / 其他文件）。"""
+    response.headers['Cache-Control'] = CACHE_DETAIL
+    file_path = manager.get_by_id(file_id)
+    if file_path is None:
+        raise HTTPException(status_code=404)
+    return _render_fragment(file_path, file_id, renderer, meta_manager)
+
+
+@router.get('/cover/{file_id}')
+async def media_cover(
+    file_id: str,
+    manager: ResourceManager = Depends(get_manager),
+    meta_manager: MetaManager = Depends(get_meta_manager),
+) -> Response:
+    """Serve the embedded cover artwork bytes for an audio resource.
+
+    封面数据来自 MetaManager 的 `<hash>-meta.json` 缓存；file_id 是内容哈希，
+    URL 不可变，因此可以安全使用 immutable 长缓存。
+    """
+    file_path = manager.get_by_id(file_id)
+    if file_path is None:
+        raise HTTPException(status_code=404)
+    mime_type, _ = mimetypes.guess_type(file_path.name)
+    if not (mime_type and mime_type.startswith('audio/')):
+        raise HTTPException(status_code=404)
+    meta = meta_manager.get_or_build(file_path, file_id)
+    content = meta_manager.artwork_bytes(meta)
+    if content is None:
+        raise HTTPException(status_code=404)
+    return Response(
+        content=content,
+        media_type=meta.get('artwork_mime') or 'image/jpeg',
+        headers={'Cache-Control': CACHE_MEDIA},
+    )
 
 
 @router.get('/media/{file_id}')
@@ -217,7 +305,12 @@ async def media(
     file_path = manager.get_by_id(file_id)
     if file_path is None:
         raise HTTPException(status_code=404)
-    return FileResponse(path=file_path, filename=file_path.name)
+    # 内容寻址：file_id 是内容哈希，URL 不可变，可安全 immutable 长缓存
+    return FileResponse(
+        path=file_path,
+        filename=file_path.name,
+        headers={'Cache-Control': CACHE_MEDIA},
+    )
 
 
 @router.get('/static/{file_path:path}')
@@ -232,17 +325,21 @@ async def static_resource(
         raise HTTPException(status_code=404)
     if not target.is_file():
         raise HTTPException(status_code=404)
-    return FileResponse(path=target)
+    # 静态文件按路径寻址，可能被覆盖 → 短缓存；FileResponse 自带的
+    # ETag/Last-Modified 在过期后触发条件请求做复验
+    return FileResponse(path=target, headers={'Cache-Control': CACHE_STATIC})
 
 
 # ---------------------------------------------------------------------------
 # App factory（显式依赖注入，无全局状态）
 # ---------------------------------------------------------------------------
 def build_app(config: AppConfig) -> FastAPI:
-    """Build a FastAPI app; config & manager are injected via app.state."""
-    app = FastAPI(title='Infinity Music', version='0.1.0')
+    """Build a FastAPI app; deps (config/manager/renderer) injected via app.state."""
+    app = FastAPI(title=APP_NAME, version='0.1.0')
     app.state.config = config
     app.state.resource_manager = ResourceManager(config.res_root)
+    app.state.meta_manager = MetaManager(config.meta_cache)
+    app.state.page_renderer = PageRenderer(load_page_templates(config.templates_dir))
     app.include_router(router)
     return app
 

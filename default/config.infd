@@ -1,0 +1,11 @@
+server = {
+    host: str = "0.0.0.0",
+    port: <int, range(1, 65535)> = 8000,
+    reload: bool = false,
+}
+media_dir = p"./res"
+static_dir = p"./static"
+ui_css = p"./custom.css"
+ui_js = p"./custom.js"
+templates_dir = p"./templates"
+meta_cache = p"./meta_cache"

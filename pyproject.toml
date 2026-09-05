@@ -45,7 +45,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-infinity_music = ["py.typed"]
+infinity_music = ["py.typed", "assets/*"]
 
 [tool.ruff]
 line-length = 120

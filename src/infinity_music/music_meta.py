@@ -101,16 +101,10 @@ def get_audio_metadata(path: Path) -> dict[str, Any]:
 
         # 根据文件类型提取内嵌封面
         if isinstance(audio, FLAC):
-            # 优先使用 audio.pictures（最可靠）
+            # FLAC 以 pictures 属性为准（最可靠）；为空则交给外部封面兜底
             cover = _extract_cover_from_flac_pictures(audio)
             if cover:
                 artwork_data, artwork_mime = cover
-            else:
-                # 如果 pictures 为空，再尝试从 tags 中找（可能某些版本仍存在）
-                if tags is not None:
-                    cover = _extract_cover_from_flac(tags)  # 注意这个函数需要存在，我们稍后定义
-                    if cover:
-                        artwork_data, artwork_mime = cover
         elif hasattr(tags, 'getall'):  # ID3 (MP3)
             cover = _extract_cover_from_id3(tags)
             if cover:

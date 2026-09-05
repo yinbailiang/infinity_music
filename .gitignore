@@ -11,4 +11,9 @@ wheels/
 # Virtual environments
 .venv
 
-my_profile
+# Infinity Music profile（default）：提交代码/模板/静态资源，
+# 但忽略本地媒体库与运行时缓存（音乐/视频不纳入版本控制）
+default/res/*
+!default/res/.gitkeep
+default/meta_cache/*
+!default/meta_cache/.gitkeep

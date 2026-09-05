@@ -1,0 +1,334 @@
+/* 全局变量：日夜模式自动切换 */
+:root {
+  --bg-color: #f5f5f7;
+  --text-color: #1d1d1f;
+  --link-color: #0066cc;
+  --link-hover: #004499;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: #1c1c1e;
+    --text-color: #e5e5e7;
+    --link-color: #64b5f6;
+    --link-hover: #afd8f9;
+  }
+}
+
+/* 基础样式 */
+body {
+  margin: 0;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+/* 卡片 */
+main {
+  display: grid;
+  place-items: center left;
+}
+
+/* 链接 */
+a {
+  color: var(--link-color);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+a:hover {
+  color: var(--link-hover);
+}
+
+/* 标题 */
+h1 {
+  font-weight: 600;
+}
+
+.home-res {
+  line-height: 0.2;
+  font-size: max(1.5vh, 1rem);
+}
+
+.detail-main {
+  display: flex;
+  /* 修正为有效值 */
+  flex-direction: column;
+  /* 如果内部是纵向排列 */
+  align-items: center;
+  /* 水平居中 */
+  margin-top: -20vh;
+  /* 上移，根据喜好调整 */
+}
+
+.detail-title {
+  font-weight: normal;
+  font-size: max(2vh, 1.5rem);
+}
+
+.detail-media {
+  max-width: 95%;
+  max-height: 60vh;
+  height: auto;
+}
+
+.detail-meta {
+  text-align: center;
+  font-size: max(1.2vh, 0.8rem);
+}
+
+.detail-cover {
+    max-width: 30vw;       /* 最大宽度 */
+    max-height: 30vh;      /* 最大高度 */
+    min-width: 64px;       /* 最小宽度 */
+    min-height: 64px;      /* 最小高度 */
+    height: auto;
+    width: auto;
+}
+
+/* =====================================================================
+   下载 / 返回：纯 SVG 图标链接（无文字、无按钮外观）
+   图标用 currentColor，日夜模式自动跟随，无需额外资源
+   ===================================================================== */
+.detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  margin-top: 2.8rem;
+}
+
+.detail-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem;
+  color: var(--text-color);
+  opacity: 0.72;
+  border-radius: 999px;
+  transition: color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+
+.detail-icon svg {
+  display: block;
+  width: 1.7rem;
+  height: 1.7rem;
+}
+
+.detail-icon:hover {
+  color: var(--link-color);
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+.detail-icon:active {
+  transform: translateY(0);
+}
+
+.detail-icon:focus-visible {
+  outline: 2px solid var(--link-color);
+  outline-offset: 2px;
+}
+
+/* =====================================================================
+   自绘极简播放器：替代 Chromium 原生控件条，配色完全由本文件控制。
+   原生 <audio> 已去掉 controls 并隐藏，播放/暂停、进度、时间均由
+   下方自定义元素实现（仅作用于音频，视频不受影响）。
+   ===================================================================== */
+audio.detail-media {
+  display: none; /* 已由自绘控制条接管 */
+}
+
+.player-wrap {
+  margin-top: 2.4rem;
+}
+
+.player {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: min(26rem, 86vw);
+}
+
+/* 播放/暂停：无按钮风格图标，与下载/返回图标一致 */
+.player-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: 0.3rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-color);
+  opacity: 0.72;
+  border-radius: 999px;
+  transition: color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+
+.player-toggle:hover {
+  color: var(--link-color);
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+.player-toggle:active {
+  transform: translateY(0);
+}
+
+.player-toggle:focus-visible {
+  outline: 2px solid var(--link-color);
+  outline-offset: 2px;
+}
+
+.player-toggle svg {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+/* 默认（暂停）态：只显示实心播放三角（略小），隐藏暂停竖线 */
+.player-toggle .player-ico-play {
+  display: block;
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.player-toggle .player-ico-pause {
+  display: none;
+}
+
+/* 播放态：互换，只显示实心暂停竖线 */
+.player.is-playing .player-ico-play {
+  display: none;
+}
+
+.player.is-playing .player-ico-pause {
+  display: block;
+}
+
+/* 进度条：细线 + 强调色填充 */
+.player-track {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 1.1rem; /* 扩大点击热区 */
+  cursor: pointer;
+  touch-action: none; /* 拖动时禁止页面滚动/缩放抢手势 */
+  user-select: none; /* 拖动时避免选中文本 */
+}
+
+.player-track-bar {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-color) 22%, transparent);
+  overflow: hidden;
+}
+
+.player-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0%;
+  border-radius: 999px;
+  background: var(--link-color);
+}
+
+/* 时间：小号等宽数字，低调 */
+.player-time {
+  flex: none;
+  font-size: max(1.3vh, 0.72rem);
+  color: var(--text-color);
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* =====================================================================
+   触屏 / 小屏适配：手机上放大播放键、进度线与下载/返回图标，
+   保证可点面积不小于 44px；桌面端维持小而克制的观感。
+   命中条件：视口 ≤768px（手机竖屏/小平板）或主指针为粗指针（触屏）。
+   ===================================================================== */
+@media (max-width: 768px), (pointer: coarse) {
+  .player {
+    width: min(92vw, 30rem);
+    gap: 1rem;
+  }
+
+  /* 播放/暂停键：图标加大 + 热区扩大 */
+  .player-toggle {
+    padding: 0.55rem;
+  }
+
+  .player-toggle svg {
+    width: 1.9rem;
+    height: 1.9rem;
+  }
+
+  .player-toggle .player-ico-play {
+    width: 1.55rem;
+    height: 1.55rem;
+  }
+
+  /* 进度条：线更粗、拖拽热区更高 */
+  .player-track {
+    height: 1.6rem;
+  }
+
+  .player-track-bar {
+    height: 6px;
+  }
+
+  .player-time {
+    font-size: max(1.6vh, 0.85rem);
+  }
+
+  /* 封面图：手机上放大（最多 40vw），小屏也保证最小可读尺寸 */
+  .detail-cover {
+    max-width: 80vw;
+    min-width: 96px;
+    min-height: 96px;
+  }
+
+  /* 手机上整段竖向更紧凑 */
+  .player-wrap {
+    margin-top: 1.2rem;
+  }
+
+  /* 下载 / 返回图标同步放大，方便拇指点击 */
+  .detail-icon {
+    padding: 0.6rem;
+  }
+
+  .detail-icon svg {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .detail-actions {
+    gap: 2.6rem;
+    margin-top: 1.2rem; /* 手机上让下载/返回与播放条竖向更紧凑 */
+  }
+}
+/* =====================================================================
+   htmx 惰性加载骨架：/detail 先渲染占位，#media-content 由 htmx 填充
+   ===================================================================== */
+.detail-loading {
+  min-height: 18vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-color);
+  opacity: 0.55;
+  font-size: max(1.5vh, 0.95rem);
+}
+
+.detail-loading-text {
+  margin: 0;
+}
