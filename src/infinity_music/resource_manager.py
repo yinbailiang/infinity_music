@@ -37,11 +37,11 @@ class ResourceManager:
         resources: List[Tuple[Path, str]] = []
 
         for current_root, dirs, files in os.walk(self.root):
-            # Skip hidden directories (optional)
+            # 隐藏目录与隐藏文件（.gitkeep/.DS_Store/.hash_cache.json 等）不作为资源
             dirs[:] = [d for d in dirs if not d.startswith('.')]
 
             for file_name in files:
-                if file_name == CACHE_FILE_NAME:
+                if file_name.startswith('.'):
                     continue
 
                 file_path = Path(current_root, file_name)
