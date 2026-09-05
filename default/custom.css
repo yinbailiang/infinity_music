@@ -78,19 +78,27 @@ h1 {
   flex-direction: column;
   align-items: center;
   gap: 0.35rem;
-  /* 底部边缘渐变遮罩（顶部贴顶，避免未滚动时遮住第一行） */
+  /* 上下边缘渐变遮罩；首尾由等高空白占位 .home-maskpad 垫开，避免遮住条目 */
   -webkit-mask-image: linear-gradient(
     to bottom,
-    black 0,
+    transparent 0,
+    black 0.75rem,
     black calc(100% - 0.75rem),
     transparent 100%
   );
   mask-image: linear-gradient(
     to bottom,
-    black 0,
+    transparent 0,
+    black 0.75rem,
     black calc(100% - 0.75rem),
     transparent 100%
   );
+}
+
+/* 与遮罩淡出区等高的占位（0.75rem），滚动时随内容一起移动 */
+.home-maskpad {
+  flex: none;
+  height: 0.75rem;
 }
 
 /* 首页条目：flex 一行 = 图标 + (曲名 / 小字作者)；桌面锁 50vw，条目同宽对齐 */

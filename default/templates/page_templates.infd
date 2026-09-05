@@ -19,7 +19,11 @@ home_page = ```
 <body class="home-body">
     <main class="home-main">
         <h1 class="home-title">$app_name</h1>
-        <div class="home-list">$items</div>
+        <div class="home-list">
+            <div class="home-maskpad" aria-hidden="true"></div>
+            $items
+            <div class="home-maskpad" aria-hidden="true"></div>
+        </div>
     </main>
 </body>
 </html>
