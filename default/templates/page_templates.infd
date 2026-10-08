@@ -115,6 +115,7 @@ detail_page = ```
     <link rel="stylesheet" href="/static/custom.css" />
     <script src="/static/htmx.min.js"></script>
     <script src="/static/custom.js" defer></script>
+    <script src="/static/playerlist.js" defer></script>
     <title>$file_name - $app_name</title>
 </head>
 <body class="detail-body">
