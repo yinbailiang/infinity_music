@@ -78,7 +78,7 @@ def _find_external_cover(file_path: Path) -> Optional[Tuple[bytes, str]]:
     return None
 
 
-@lru_cache
+@lru_cache(maxsize=2048)
 def get_audio_metadata(path: Path) -> dict[str, Any]:
     try:
         audio = MutagenFile(path)

@@ -1,6 +1,6 @@
 server = {
     host: str = "0.0.0.0",
-    port: <int, range(1, 65535)> = 8000,
+    port: <int, range(1, 65535)> = 32523,
     reload: bool = false,
 }
 media_dir = p"./res"

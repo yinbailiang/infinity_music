@@ -60,7 +60,7 @@ dir_item = ```
 ```
 
 search_row = ```
-<details class="dir search-dir" open>
+<details class="dir search-dir">
     <summary class="dir-summary">
         <svg class="dir-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="9 18 15 12 9 6"/></svg>
         <svg class="dir-ico search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
