@@ -5,11 +5,14 @@
 必须随 profile 一起维护。渲染使用 string.Template 的 $var 风格。
 """
 
+import logging
 from pathlib import Path
 from string import Template
 
 from infinity_data import safe_load
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 TEMPLATE_FILE = 'page_templates.infd'
 
@@ -20,18 +23,16 @@ class PageTemplates(BaseModel):
     home_page: str = Field(description='主页整页骨架（$app_name/$items）')
     home_empty: str = Field(description='无资源时的占位片段')
     home_item: str = Field(description='主页单个资源链接项（$file_id/$name）')
-    dir_item: str = Field(
-        description='文件夹行（htmx 惰性展开，$dir_rel/$dir_name/$dir_count）'
-    )
+    home_item_thumb: str = Field(description='条目封面缩略图 img 片段（$file_id，指向 /cover 接口）')
+    icon_audio: str = Field(description='音频条目回退图标（无内嵌封面时，无变量）')
+    icon_video: str = Field(description='视频条目图标（无变量）')
+    icon_file: str = Field(description='其他文件条目图标（无变量）')
+    dir_item: str = Field(description='文件夹行（htmx 惰性展开，$dir_rel/$dir_name/$dir_count）')
     search_row: str = Field(description='默认置顶的虚拟搜索文件夹（含搜索框与结果容器）')
-    detail_page: str = Field(
-        description='详情页整页骨架（$app_name/$file_name/$content/$file_id）'
-    )
+    detail_page: str = Field(description='详情页整页骨架（$app_name/$file_name/$content/$file_id）')
     detail_loading: str = Field(description='详情页骨架占位，htmx 惰性加载容器（$file_id）')
     detail_video: str = Field(description='视频详情内容片段（$file_name/$file_id）')
-    detail_audio: str = Field(
-        description='音频详情内容片段（$cover/$meta_title/$meta_artist/$meta_album/$file_id）'
-    )
+    detail_audio: str = Field(description='音频详情内容片段（$cover/$meta_title/$meta_artist/$meta_album/$file_id）')
     detail_cover: str = Field(description='音频封面 img 片段，指向 /cover 接口（$file_id）')
     detail_other: str = Field(description='其他文件详情内容片段（$file_name）')
 
@@ -83,9 +84,18 @@ class PageRenderer:
 
     def __init__(self, templates: PageTemplates) -> None:
         self._templates = templates
+        # 预解析每个片段声明的 $var 占位符（含转义处理），渲染时用于提示漏传变量
+        self._placeholders: dict[str, list[str]] = {
+            name: Template(getattr(templates, name)).get_identifiers() for name in PageTemplates.model_fields
+        }
+        self._warned: set[tuple[str, tuple[str, ...]]] = set()
 
     def render(self, name: str, **kwargs: str) -> str:
-        """渲染命名片段；未提供的 $var 占位保留原样。
+        """渲染命名片段；未提供的 $var 占位保留原样，并记录一次警告。
+
+        缺少变量通常意味着变量名拼写错误（profile 作者侧）或调用处漏传；
+        警告会给出片段名与缺失变量名，便于快速定位。相同片段 + 相同缺失
+        集合只警告一次，避免刷屏。
 
         Args:
             name: 片段名（PageTemplates 字段名）
@@ -94,6 +104,16 @@ class PageRenderer:
         Returns:
             渲染后的 HTML 文本
         """
+        missing = [var for var in self._placeholders.get(name, ()) if var not in kwargs]
+        if missing:
+            key = (name, tuple(missing))
+            if key not in self._warned:
+                self._warned.add(key)
+                logger.warning(
+                    '片段 %s 渲染时缺少变量: %s（将按原样保留，请检查拼写；如需字面量 $ 请写 $$）',
+                    name,
+                    ', '.join(missing),
+                )
         raw: str = getattr(self._templates, name)
         return Template(raw).safe_substitute(**kwargs)
 

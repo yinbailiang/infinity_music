@@ -82,7 +82,7 @@ class ResourceManager:
         if self.cache_path.exists():
             try:
                 return json.loads(self.cache_path.read_text())
-            except (json.JSONDecodeError, OSError):
+            except json.JSONDecodeError, OSError:
                 pass  # Corrupted cache -> ignore, will rebuild
         return {}
 

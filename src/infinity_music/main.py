@@ -94,25 +94,6 @@ CACHE_HOME = 'no-cache'
 CACHE_DETAIL = 'public, max-age=3600, s-maxage=86400'
 
 
-# 首页条目类型图标（stroke=currentColor，跟随日夜模式文字色）
-_ICON_AUDIO = (
-    '<svg class="home-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
-    '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
-)
-_ICON_VIDEO = (
-    '<svg class="home-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
-    '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>'
-)
-_ICON_FILE = (
-    '<svg class="home-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
-    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>'
-    '<polyline points="14 2 14 8 20 8"/></svg>'
-)
-
-
 def _render_file_item(
     path: Path,
     file_id: str,
@@ -129,20 +110,17 @@ def _render_file_item(
         artist = meta.get('artist') or ''
         if meta.get('artwork_b64'):
             # 有内嵌封面：展示缩略图（经 /cover 接口，immutable 缓存）
-            icon = (
-                f'<img class="home-item-thumb" src="/cover/{file_id}" '
-                f'alt="" loading="lazy" decoding="async" />'
-            )
+            icon = renderer.render('home_item_thumb', file_id=file_id)
         else:
-            icon = _ICON_AUDIO
+            icon = renderer.render('icon_audio')
     elif mime_type and mime_type.startswith('video/'):
         title = path.stem
         artist = ''
-        icon = _ICON_VIDEO
+        icon = renderer.render('icon_video')
     else:
         title = path.stem
         artist = ''
-        icon = _ICON_FILE
+        icon = renderer.render('icon_file')
 
     return renderer.render(
         'home_item',
@@ -372,9 +350,7 @@ async def search_media(
     matched = _search_matches(query, manager, meta_manager)
     if not matched:
         return renderer.render('home_empty')
-    return ''.join(
-        _render_file_item(path, sha, renderer, meta_manager) for path, sha in matched
-    )
+    return ''.join(_render_file_item(path, sha, renderer, meta_manager) for path, sha in matched)
 
 
 @router.get('/detail/{file_id}', response_class=HTMLResponse)

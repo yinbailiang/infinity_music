@@ -110,5 +110,5 @@ class MetaManager:
             return None
         try:
             return base64.b64decode(b64)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
