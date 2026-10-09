@@ -1,4 +1,4 @@
-// Infinity Music my_profile 前端脚本
+// Infinity Music 前端脚本
 // - Media Session + 播放位置保存（localStorage）
 // - 自绘极简音频控制条（播放/暂停 + 进度 + 时间）
 // - 兼容 htmx：内容片段动态注入后，通过 htmx:load 重新扫描并幂等绑定
